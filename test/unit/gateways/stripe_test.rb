@@ -428,6 +428,13 @@ class StripeTest < Test::Unit::TestCase
     assert response.test?
   end
 
+  def test_uncaptured_emv_purchase_immediately_captures_with_emv_tc_stub
+    @gateway.expects(:ssl_request).returns(successful_authorization_response_with_icc_data)
+    @gateway.expects(:capture).with(@amount, 'ch_test_emv_charge', @options.merge(icc_data: StripeGateway::EMV_TC_STUB))
+
+    @gateway.purchase(@amount, @emv_credit_card, @options)
+  end
+
   def test_amount_localization
     @gateway.expects(:ssl_request).returns(successful_purchase_response(true))
     @gateway.expects(:post_data).with do |params|

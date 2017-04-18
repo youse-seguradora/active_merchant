@@ -18,31 +18,26 @@ class RemoteStripeEmvTest < Test::Unit::TestCase
     }
   end
 
-  # for EMV contact transactions, it's advised to do a separate auth + capture
-  # to satisfy the EMV chip's transaction flow, but this works as a legal
-  # API call. You shouldn't use it in a real EMV implementation, though.
   def test_successful_purchase_with_emv_credit_card_in_uk
     @gateway = StripeGateway.new(fixtures(:stripe_emv_uk))
     assert response = @gateway.purchase(@amount, @emv_credit_cards[:uk], @options)
     assert_success response
     assert_equal "charge", response.params["object"]
     assert response.params["paid"]
+    assert response.params["captured"]
     assert_match CHARGE_ID_REGEX, response.authorization
   end
 
-  # perform separate auth & capture rather than a purchase in practice for the
-  # reasons mentioned above.
   def test_successful_purchase_with_emv_credit_card_in_us
     @gateway = StripeGateway.new(fixtures(:stripe_emv_us))
     assert response = @gateway.purchase(@amount, @emv_credit_cards[:us], @options)
     assert_success response
     assert_equal "charge", response.params["object"]
     assert response.params["paid"]
+    assert response.params["captured"]
     assert_match CHARGE_ID_REGEX, response.authorization
   end
 
-  # For EMV contactless transactions, generally a purchase is preferred since
-  # a TC is typically generated at the point of sale.
   def test_successful_purchase_with_emv_contactless_credit_card
     @gateway = StripeGateway.new(fixtures(:stripe_emv_us))
     emv_credit_card = @emv_credit_cards[:contactless]
@@ -51,6 +46,7 @@ class RemoteStripeEmvTest < Test::Unit::TestCase
     assert_success response
     assert_equal "charge", response.params["object"]
     assert response.params["paid"]
+    assert response.params["captured"]
     assert_match CHARGE_ID_REGEX, response.authorization
   end
 
@@ -64,6 +60,8 @@ class RemoteStripeEmvTest < Test::Unit::TestCase
     assert capture = @gateway.capture(@amount, authorization.authorization)
     assert_success capture
     assert capture.emv_authorization, "Capture should contain emv_authorization containing the EMV TC"
+    assert capture.params["captured"]
+
   end
 
   def test_authorization_and_capture_with_emv_credit_card_in_us
@@ -76,6 +74,7 @@ class RemoteStripeEmvTest < Test::Unit::TestCase
     assert capture = @gateway.capture(@amount, authorization.authorization)
     assert_success capture
     assert capture.emv_authorization, "Capture should contain emv_authorization containing the EMV TC"
+    assert capture.params["captured"]
   end
 
   def test_authorization_and_capture_of_online_pin_with_emv_credit_card_in_us
@@ -92,6 +91,7 @@ class RemoteStripeEmvTest < Test::Unit::TestCase
     assert capture = @gateway.capture(@amount, authorization.authorization)
     assert_success capture
     assert capture.emv_authorization, "Capture should contain emv_authorization containing the EMV TC"
+    assert capture.params["captured"]
   end
 
   def test_authorization_and_capture_with_emv_contactless_credit_card
@@ -106,6 +106,7 @@ class RemoteStripeEmvTest < Test::Unit::TestCase
     assert capture = @gateway.capture(@amount, authorization.authorization)
     assert_success capture
     assert capture.emv_authorization, "Capture should contain emv_authorization containing the EMV TC"
+    assert capture.params["captured"]
   end
 
   def test_authorization_and_void_with_emv_credit_card_in_us

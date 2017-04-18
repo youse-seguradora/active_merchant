@@ -114,6 +114,9 @@ module ActiveMerchant #:nodoc:
             post = create_post_for_auth_or_purchase(money, payment, options)
             commit(:post, 'charges', post, options)
           end
+          if emv_payment?(payment) && r.params["captured"] == false
+            r.process { capture(money, r.authorization, options.merge(icc_data: EMV_TC_STUB)) }
+          end
         end.responses.last
       end
 
@@ -287,6 +290,8 @@ module ActiveMerchant #:nodoc:
       end
 
       private
+
+      EMV_TC_STUB = '9F270140'
 
       class StripePaymentToken < PaymentToken
         def type
