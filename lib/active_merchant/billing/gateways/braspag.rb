@@ -70,7 +70,9 @@ module ActiveMerchant #:nodoc:
       end
 
       def store(credit_card, options={})
-        post = create_post_for_card_tokenization(credit_card, options)
+        post = create_post_for_auth_or_purchase(100, credit_card, options)
+        post[:payment][:creditCard][:saveCard] = true
+
         MultiResponse.run(:use_first_response) do |r|
           r.process { commit('store', '/v2/sales', post) }
           r.process(:ignore_result) { void(r.authorization, options) }
@@ -100,7 +102,7 @@ module ActiveMerchant #:nodoc:
 
       def init_post(options)
         post = { payment: {} }
-        post[:merchantOrderId] = options[:order_id] if options[:order_id]
+        post[:merchantOrderId] = options[:order_id] || generate_unique_id
         post
       end
 
@@ -145,27 +147,26 @@ module ActiveMerchant #:nodoc:
       end
 
       def add_payment(post, payment)
+        post[:payment][:type] = 'CreditCard'
+        post[:payment][:creditCard] = {}
         if payment.is_a?(String)
           _, token, brand = payment.split('|')
-          post[:payment][:type] = 'CreditCard'
-          post[:payment][:creditCard] = { cardToken: token, brand: brand }
+          post[:payment][:creditCard][:cardToken] = token
+          post[:payment][:creditCard][:securityCode] = options[:cvv] if options[:cvv]
+          post[:payment][:creditCard][:brand] = brand
         else
-          add_credit_card(post, payment)
+          post[:payment][:creditCard][:cardNumber] = payment.number
+          post[:payment][:creditCard][:holder] = payment.name
+          post[:payment][:creditCard][:expirationDate] = expdate(payment)
+          post[:payment][:creditCard][:securityCode] = payment.verification_value
+          post[:payment][:creditCard][:brand] = CARD_BRAND[payment.brand]
         end
       end
 
-      def add_credit_card(post, payment)
-        month = format(payment.month, :two_digits)
-        year  = format(payment.year, :four_digits)
-        expiry_date = "#{month}/#{year}"
-
-        post[:payment][:type] = 'CreditCard'
-        post[:payment][:creditCard] = {}
-        post[:payment][:creditCard][:cardNumber] = payment.number
-        post[:payment][:creditCard][:holder] = payment.name
-        post[:payment][:creditCard][:expirationDate] = expiry_date
-        post[:payment][:creditCard][:securityCode] = payment.verification_value
-        post[:payment][:creditCard][:brand] = CARD_BRAND[payment.brand]
+      def expdate(credit_card)
+        month = format(credit_card.month, :two_digits)
+        year  = format(credit_card.year, :four_digits)
+        "#{month}/#{year}"
       end
 
       def create_post_for_auth_or_purchase(money, payment, options)
@@ -176,17 +177,6 @@ module ActiveMerchant #:nodoc:
         add_address(post, options)
         add_payment(post, payment)
         add_antifraud_data(post, options)
-        post
-      end
-
-      def create_post_for_card_tokenization(credit_card, options)
-        options.merge!(order_id: "store-#{generate_unique_id}")
-        post = init_post(options)
-        add_provider(post, options)
-        add_invoice(post, 100, options)
-        add_customer_data(post, credit_card, options)
-        add_credit_card(post, credit_card)
-        post[:payment][:creditCard][:saveCard] = true
         post
       end
 
